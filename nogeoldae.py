@@ -45,7 +45,8 @@ def main(args):
 						print('B', path, line_z, line_kb_uncorrected)
 						print('\t'.join(found_z))
 						print('\t'.join(found_kb_uncorrected))
-				else:
+
+				if args.collection:
 					for i in range(len(found_z)):
 						z = found_z[i]
 						k_corrected = (
