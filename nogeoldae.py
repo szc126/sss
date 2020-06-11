@@ -14,6 +14,9 @@ K_b = '\u1160-\u11a7' + '\ud7b0-\ud7c6' # Jamo + Jamo Ext-B
 K_c = '\u11a8-\u11ff' + '\ud7cb-\ud7fb' # Jamo + Jamo Ext-B
 K_RE = re.compile('(?:[' + K_a + '][' + K_b + '][' + K_c + ']?)')
 
+F_A = '\u115f' # choseong filler
+F_B = '\u1160' # jungseong filler
+
 def main(args):
 	collection = {}
 
@@ -72,20 +75,138 @@ def main(args):
 						#collection[z][k_corrected][k_uncorrected].append(path)
 						collection[z][k_corrected][k_uncorrected].append(re.sub(r'.+(\d)\/(\d+)$', r'\1-\2', path)) # XXX
 
-	if args.collection:
-		if args.paeumja:
-			for z in sorted(collection):
-				if len(collection[z]) > 1:
-					print(z)
-					for k_corrected in sorted(collection[z]):
-						k_variant_count = len(collection[z][k_corrected]) if len(collection[z][k_corrected]) > 1 else ''
-						print('\t' + str(k_corrected) + '\t' + str(k_variant_count) + str(collection[z][k_corrected]))
-		else:
-			for z in sorted(collection):
+	if args.collection == 'text':
+		for z in sorted(collection):
+			if (len(collection[z]) > 1 if args.paeumja else True):
 				print(z)
 				for k_corrected in sorted(collection[z]):
 					k_variant_count = len(collection[z][k_corrected]) if len(collection[z][k_corrected]) > 1 else ''
 					print('\t' + str(k_corrected) + '\t' + str(k_variant_count) + str(collection[z][k_corrected]))
+	elif args.collection == 'html':
+		from yattag import Doc
+		doc, tag, text, line = Doc().ttl()
+		doc.asis('<!DOCTYPE html>')
+		with tag('html'):
+			with tag('body'):
+				with tag('script', ('src', 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.slim.min.js')):
+					pass
+				with tag('script', ('src', 'https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.31.3/js/jquery.tablesorter.min.js')):
+					pass
+				with tag('script', ('src', 'https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.31.3/js/widgets/widget-filter.min.js')):
+					pass
+				with tag('script', ('src', 'https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.31.3/js/widgets/widget-cssStickyHeaders.min.js')):
+					pass
+				doc.stag('link', ('href', 'https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.31.3/css/theme.blue.min.css'), ('rel', 'stylesheet'))
+
+				with tag('script'):
+					text("""
+						document.addEventListener('DOMContentLoaded', function() {
+							$('#MYTABLE').tablesorter({
+								theme: 'blue',
+								 widgets: ['filter', 'cssStickyHeaders'],
+							});
+
+							/*
+							$('.tablesorter-filter-row td[data-column=1]').attr('colspan', 5);
+							$('.tablesorter-filter-row td[data-column=2]').remove();
+							$('.tablesorter-filter-row td[data-column=3]').remove();
+							$('.tablesorter-filter-row td[data-column=4]').remove();
+							$('.tablesorter-filter-row td[data-column=5]').remove();
+							// ----
+							$('.tablesorter-filter-row td[data-column=6]').attr('colspan', 5);
+							$('.tablesorter-filter-row td[data-column=7]').remove();
+							$('.tablesorter-filter-row td[data-column=8]').remove();
+							$('.tablesorter-filter-row td[data-column=9]').remove();
+							$('.tablesorter-filter-row td[data-column=10]').remove();
+							*/
+						});
+					""")
+				with tag('style'):
+					text("""
+						body {
+							font-family: 'nanumbarungothic yethangul', sans-serif;
+							font-size: 150%;
+						}
+						.tablesorter-blue th, .tablesorter-blue thead td {
+							font: inherit;
+						}
+						td.no-jungseong {
+							background-color: rgba(0, 0, 0, 0.1);
+							color: white;
+						}
+						td.pages {
+							font-size: 6px;
+						}
+					""")
+
+				with tag('table', ('id', 'MYTABLE'), ('class', 'tablesorter tablesorter-blue')):
+					with tag('thead'):
+						with tag('tr'):
+							with tag('th', ('rowspan', 2)):
+								text('z')
+							with tag('th', ('colspan', 5)):
+								text('ka corrected')
+							with tag('th', ('colspan', 5)):
+								text('kb corrected')
+							with tag('th', ('rowspan', 2)):
+								text('pages')
+						with tag('tr'):
+							with tag('th'):
+								text('ka')
+							with tag('th',):
+								text('初')
+							with tag('th',):
+								text('中')
+							with tag('th',):
+								text('終')
+							with tag('th',):
+								text('韻')
+							with tag('th'):
+								text('kb')
+							with tag('th',):
+								text('初')
+							with tag('th',):
+								text('中')
+							with tag('th',):
+								text('終')
+							with tag('th',):
+								text('韻')
+					with tag('tbody'):
+						for z in sorted(collection):
+							if (len(collection[z]) > 1 if args.paeumja else True):
+								i = 0
+								while i < len(collection[z]):
+									for k_corrected in sorted(collection[z]):
+										with tag('tr'):
+											#if i == 0:
+												#with tag('th', ('rowspan', len(collection[z]))):
+													#text(z)
+											# rowspan not supported by tablesorter
+
+											line('th', z)
+											# ----
+											line('td', k_corrected[0])
+											line('td', k_corrected[0][0] + F_B)
+											line('td', F_A + k_corrected[0][1])
+											jungseong = (F_A + F_B + k_corrected[0][2]) if len(k_corrected[0]) == 3 else '-'
+											with tag('td', ('class', 'no-jungseong' if jungseong == '-' else '')):
+												text(jungseong)
+											line('td', F_A + k_corrected[0][1:])
+											# ----
+											line('td', k_corrected[1])
+											line('td', k_corrected[1][0] + F_B)
+											line('td', F_A + k_corrected[1][1])
+											jungseong = (F_A + F_B + k_corrected[1][2]) if len(k_corrected[1]) == 3 else '-'
+											with tag('td', ('class', 'no-jungseong' if jungseong == '-' else '')):
+												text(jungseong)
+											line('td', F_A + k_corrected[1][1:])
+											# ----
+											with tag('td', ('class', 'pages')):
+												text(str(collection[z][k_corrected]))
+											# ----
+											i += 1
+
+		print(doc.getvalue())
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
@@ -102,8 +223,8 @@ if __name__ == "__main__":
 	parser.add_argument(
 		'-c',
 		dest = 'collection',
-		action = 'store_true',
-		help = 'print collection',
+		choices = ['text', 'html'],
+		help = 'collect data, and export as text/html',
 	)
 	parser.add_argument(
 		'-p',
