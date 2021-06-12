@@ -12,13 +12,43 @@ Z_RE = r'(?:(?:\p{Hani}|[⿰-⿻][^()]+)(?:\(\p{Hani}\))?)'
 K_a = '\u1100-\u115f' + '\ua960-\ua97c' # Jamo + Jamo Ext-A (Unicode 13.0)
 K_b = '\u1160-\u11a7' + '\ud7b0-\ud7c6' # Jamo + Jamo Ext-B
 K_c = '\u11a8-\u11ff' + '\ud7cb-\ud7fb' # Jamo + Jamo Ext-B
-K_RE = re.compile('(?:[' + K_a + '][' + K_b + '][' + K_c + ']?)')
+K_x = '\u3131-\u318e' # Compatibility Jamo
+K_RE = re.compile('(?:[' + K_a + '][' + K_b + '][' + K_c + ']?|[' + K_x + ']+)')
 
 F_A = '\u115f' # choseong filler
 F_B = '\u1160' # jungseong filler
 
 def main(args):
 	collection = {}
+	collection_variants = {}
+
+	def collect_variants(matchobj):
+		#if matchobj.group(2) is not None:
+		# does not work
+		try:
+			z_variant = matchobj.group(1)
+			z_orthodox = matchobj.group(2)
+		except:
+			z_variant = '…'
+			z_orthodox = matchobj.group(1)
+
+		if not z_orthodox in collection_variants:
+			collection_variants[z_orthodox] = []
+		if not z_variant in collection_variants[z_orthodox]:
+			collection_variants[z_orthodox].append(z_variant)
+
+		return z_orthodox
+
+	def format_pages(data):
+		ret = []
+		for ka, kb in data:
+			ret_local = (ka or '-') + '/' + (kb or '-')
+			for volume_and_page_number in data[(ka, kb)]:
+				volume, page_number = volume_and_page_number.split('-')
+				url = f'https://ko.wikisource.org/wiki/Page:重刊老乞大諺解_00{volume}.pdf/{page_number}'
+				ret_local += f', <a href="{url}">{volume_and_page_number}</a>'
+			ret.append(ret_local)
+		return '<hr>'.join(ret)
 
 	for path in args.paths:
 		with open(path, mode = 'r', encoding = 'utf-8') as file:
@@ -61,7 +91,9 @@ def main(args):
 							found_kb_uncorrected[i] if found_kb_uncorrected[i] != found_kb_corrected[i] else '',
 						)
 
-						z = re.sub(r'(.+)\((.+)\)', r'\2', z) # XXX
+						z = re.sub(r'(.+)\((.+)\)', collect_variants, z) # XXX
+						z = re.sub(r'{{' + unicodedata.normalize('NFD', '이체자') + '\|(.*?)\|(.*?)}}', collect_variants, z) # XXX
+						z = re.sub(r'{{' + unicodedata.normalize('NFD', '이체자') + '\|(.*?)}}', collect_variants, z) # XXX
 
 						if not z in collection:
 							collection[z] = {}
@@ -87,6 +119,9 @@ def main(args):
 		doc, tag, text, line = Doc().ttl()
 		doc.asis('<!DOCTYPE html>')
 		with tag('html'):
+			with tag('head'):
+				with tag('meta', ('charset', 'utf-8')):
+					pass
 			with tag('body'):
 				with tag('script', ('src', 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.slim.min.js')):
 					pass
@@ -135,24 +170,28 @@ def main(args):
 							color: white;
 						}
 						td.pages {
-							font-size: 6px;
+							font-size: 50%;
 						}
 					""")
 
 				with tag('table', ('id', 'MYTABLE'), ('class', 'tablesorter tablesorter-blue')):
 					with tag('thead'):
 						with tag('tr'):
-							with tag('th', ('rowspan', 2)):
-								text('z')
+							with tag('th', ('colspan', 2)):
+								text('字')
 							with tag('th', ('colspan', 5)):
-								text('ka corrected')
+								text('俗音(校正畢)')
 							with tag('th', ('colspan', 5)):
-								text('kb corrected')
+								text('正音(校正畢)')
 							with tag('th', ('rowspan', 2)):
-								text('pages')
+								text('俗(原文)/正(原文), 上下補-No')
 						with tag('tr'):
 							with tag('th'):
-								text('ka')
+								text('正')
+							with tag('th'):
+								text('別')
+							with tag('th'):
+								text('俗')
 							with tag('th',):
 								text('初')
 							with tag('th',):
@@ -162,7 +201,7 @@ def main(args):
 							with tag('th',):
 								text('韻')
 							with tag('th'):
-								text('kb')
+								text('正')
 							with tag('th',):
 								text('初')
 							with tag('th',):
@@ -184,6 +223,7 @@ def main(args):
 											# rowspan not supported by tablesorter
 
 											line('th', z)
+											line('th', '<hr>'.join(collection_variants[z]) if z in collection_variants else '')
 											# ----
 											line('td', k_corrected[0])
 											line('td', k_corrected[0][0] + F_B)
@@ -202,11 +242,11 @@ def main(args):
 											line('td', F_A + k_corrected[1][1:])
 											# ----
 											with tag('td', ('class', 'pages')):
-												text(str(collection[z][k_corrected]))
+												text(format_pages(collection[z][k_corrected]))
 											# ----
 											i += 1
 
-		print(doc.getvalue())
+		print(doc.getvalue().replace('&lt;', '<').replace('&gt;', '>'))
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
