@@ -1,0 +1,46 @@
+name: GitHub Pages
+on:
+  schedule:
+    - cron: '0 0,12 * * 1'
+  workflow_dispatch:
+jobs:
+  gh-pages:
+    name: GitHub Pages
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        book: ['jungno']
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: chmod
+        run: |
+          chmod +x *.sh *.py
+
+      - name: Download SDL
+        run: |
+         wget --no-clobber "https://raw.githubusercontent.com/${GITHUB_ACTOR:?Download whose copy of sdl}/sdl/main/sdl-requirements.txt" -O"/tmp/sdl-requirements.txt"
+         pip install -r "/tmp/sdl-requirements.txt"
+         wget --no-clobber "https://raw.githubusercontent.com/${GITHUB_ACTOR:?Download whose copy of sdl}/sdl/main/sdl.py" -O"/tmp/sdl.py"
+         chmod +x "/tmp/sdl.py"
+
+      - name: Download book
+        run: |
+          ./${{ matrix.book }}-dl.sh
+
+      - name: Generate tables
+        run: |
+          pip install -r ${{ matrix.book }}-requirements.txt
+          sed -E --in-place 's/; dragon.+//g' ${{ matrix.book }}.sh
+          ./${{ matrix.book }}.sh
+
+      - name: Push
+        run: |
+          git fetch --depth 1 origin gh-pages:gh-pages || git checkout --orphan gh-pages
+          git rm -rf .
+          cp /tmp/${{ matrix.book }}.* .
+          git add ${{ matrix.book }}.*
+          git config user.email '-'
+          git config user.name 'GitHub Actions'
+          git commit -m 'Update'
+          git push --set-upstream origin gh-pages
